@@ -363,6 +363,21 @@ module RSpec
           expect(mod.hello).to eq(:hello)
         end
 
+        it "correctly restores from allow_any_instance_of for self extend" do
+          mod = Module.new {
+            extend self
+            def hello; :hello; end
+          }
+
+          allow_any_instance_of(mod).to receive(:hello) { :stub }
+
+          expect(mod.hello).to eq(:stub)
+
+          reset_all
+
+          expect(mod.hello).to eq(:hello)
+        end
+
         it "correctly handles stubbing inherited mixed in class methods" do
           mod = Module.new do
             def method_a
