@@ -141,7 +141,9 @@ module RSpec
         return true if RUBY_VERSION < '1.9' && owner == @object
 
         owner == @klass ||
-          owner.singleton_class == @klass || # When `extend self` is used
+          # When `extend self` is used, and not under any instance of
+          (owner.singleton_class == @klass &&
+            !Mocks.space.any_instance_recorder_for(owner, true)) ||
           !(method_defined_on_klass?(owner))
       end
     end
