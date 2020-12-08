@@ -176,12 +176,11 @@ module RSpec
             expect(klass.new.foo).to eq(45)
           end
 
-          it 'prevents stubbing a method that is defined on the prepended module' do
+          it 'allows stubbing a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            allow_any_instance_of(klass).to receive(:foo).and_return(45)
 
-            expect {
-              allow_any_instance_of(klass).to receive(:foo).and_return(45)
-            }.to fail_with(/prepended module/)
+            expect(klass.new.foo).to eq(45)
           end
 
           it 'allows stubbing a chain starting with a method that is not defined on the prepended module' do
@@ -191,12 +190,11 @@ module RSpec
             expect(klass.new.foo.bar).to eq(45)
           end
 
-          it 'prevents stubbing a chain starting with a method that is defined on the prepended module' do
+          it 'allows stubbing a chain starting with a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
 
-            expect {
-              allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
-            }.to fail_with(/prepended module/)
+            expect(klass.new.foo.bar).to eq(45)
           end
         end
 
@@ -590,12 +588,11 @@ module RSpec
             expect(klass.new.foo).to eq(45)
           end
 
-          it 'prevents mocking a method that is defined on the prepended module' do
+          it 'allows mocking a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            expect_any_instance_of(klass).to receive(:foo).and_return(45)
 
-            expect {
-              expect_any_instance_of(klass).to receive(:foo).and_return(45)
-            }.to fail_with(/prepended module/)
+            expect(klass.new.foo).to eq(45)
           end
         end
 
