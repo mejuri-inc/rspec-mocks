@@ -291,8 +291,8 @@ module RSpec
         end
 
         def prepended_module(method_name)
-          @prepended_module = RSpec::Mocks::Proxy.prepended_modules_of(@klass)
-                                                 .select { |mod| mod.method_defined?(method_name) }.last
+          @prepended_module =
+            RSpec::Mocks::Proxy.prepended_modules_of(@klass).select { |mod| mod.method_defined?(method_name) }.last
         end
       end
     end
