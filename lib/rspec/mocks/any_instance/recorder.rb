@@ -127,7 +127,7 @@ module RSpec
         # @private
         def build_alias_prepended_method_name(method_name)
           unless @klass.name
-            Object::const_set("Klass_#{@klass.object_id}", @klass)
+            Object.const_set("Klass_#{@klass.object_id}", @klass)
           end
           "__#{@klass.name}_#{method_name}_without_any_instance__"
         end
