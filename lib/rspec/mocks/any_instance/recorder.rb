@@ -21,6 +21,7 @@ module RSpec
           @backed_up_method_owner = {}
           @klass = klass
           @expectation_set = false
+          @prepended_module = nil
 
           return unless RSpec::Mocks.configuration.verify_partial_doubles?
           RSpec::Mocks.configuration.verifying_double_callbacks.each do |block|
@@ -124,6 +125,14 @@ module RSpec
         end
 
         # @private
+        def build_alias_prepended_method_name(method_name)
+          unless @klass.name
+            Object::const_set("Klass_#{@klass.object_id}", @klass)
+          end
+          "__#{@klass.name}_#{method_name}_without_any_instance__"
+        end
+
+        # @private
         def already_observing?(method_name)
           @observed_methods.include?(method_name) || super_class_observing?(method_name)
         end
@@ -196,13 +205,19 @@ module RSpec
           return unless @klass.instance_method(method_name).owner == @klass
 
           alias_method_name = build_alias_method_name(method_name)
-          if prepended_module(method_name)
+          if @prepended_module
+            alias_prepended_method_name = build_alias_prepended_method_name(method_name)
+            module_methods = @prepended_module.public_instance_methods
+            remaining_stubs = module_methods.select { |m| m.end_with?("_#{method_name}_without_any_instance__") }
             @prepended_module.module_exec do
+              remove_method alias_prepended_method_name
+              break if remaining_stubs.size > 1
+
               remove_method method_name
               alias_method method_name, alias_method_name
               remove_method alias_method_name
             end
-            @prepended_module = nil
+            @prepended_module = nil if remaining_stubs.size == 1 # This was the last stub
           else
             @klass.class_exec(@backed_up_method_owner) do |backed_up_method_owner|
               remove_method method_name
@@ -245,8 +260,11 @@ module RSpec
           alias_method_name = build_alias_method_name(method_name)
           @backed_up_method_owner[method_name.to_sym] ||= @klass.instance_method(method_name).owner
           if prepended_module(method_name)
-            @prepended_module.module_exec do
-              alias_method alias_method_name, method_name
+            unless @prepended_module.method_defined?(alias_method_name)
+              @prepended_module.module_exec do
+                alias_method alias_method_name, method_name
+                remove_method method_name
+              end
             end
           else
             @klass.class_exec do
@@ -270,10 +288,22 @@ module RSpec
           @observed_methods << method_name
           backup_method!(method_name)
           recorder = self
-          define_method_on = prepended_module(method_name) ? @prepended_module : @klass
-          define_method_on.__send__(:define_method, method_name) do |*args, &blk|
-            recorder.playback!(self, method_name)
-            __send__(method_name, *args, &blk)
+          if @prepended_module
+            unless @prepended_module.method_defined?(method_name)
+              @prepended_module.__send__(:define_method, method_name) do |*args, &blk|
+                __send__("__#{self.class.name}_#{method_name}_without_any_instance__", *args, &blk)
+              end
+            end
+
+            @prepended_module.__send__(:define_method, build_alias_prepended_method_name(method_name)) do |*args, &blk|
+              recorder.playback!(self, method_name)
+              __send__(method_name, *args, &blk)
+            end
+          else
+            @klass.__send__(:define_method, method_name) do |*args, &blk|
+              recorder.playback!(self, method_name)
+              __send__(method_name, *args, &blk)
+            end
           end
           @klass.__send__(:ruby2_keywords, method_name) if @klass.respond_to?(:ruby2_keywords, true)
         end
