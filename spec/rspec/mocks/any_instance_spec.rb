@@ -183,6 +183,28 @@ module RSpec
             expect(klass.new.foo).to eq(45)
           end
 
+          context 'different classes having the same module prepended' do
+            let(:klass1) do
+              Class.new do
+                def existing_method; :existing_method_return_value; end
+                def existing_method_with_arguments(_a, _b=nil); :existing_method_with_arguments_return_value; end
+                def another_existing_method; end
+                private
+                def private_method; :private_method_return_value; end
+              end
+            end
+
+            it 'allows stubbing methods defined on the prepended module for different classes' do
+              klass.class_eval { prepend Module.new { def foo; end } }
+              klass1.class_eval { prepend Module.new { def foo; end } }
+              allow_any_instance_of(klass).to receive(:foo).and_return(45)
+              allow_any_instance_of(klass1).to receive(:foo).and_return(54)
+
+              expect(klass.new.foo).to eq(45)
+              expect(klass1.new.foo).to eq(54)
+            end
+          end
+
           it 'allows stubbing a chain starting with a method that is not defined on the prepended module' do
             klass.class_eval { prepend Module.new { def other; end } }
             allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
