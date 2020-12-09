@@ -290,8 +290,17 @@ module RSpec
           recorder = self
           if @prepended_module
             unless @prepended_module.method_defined?(method_name)
+              original_method_name = build_alias_method_name(method_name)
+
+              # Defining the stubbed method as a proxy, calling further the stub specifically defined for the
+              # current class, or, if no such stub found, calling the original method
               @prepended_module.__send__(:define_method, method_name) do |*args, &blk|
-                __send__("__#{self.class.name}_#{method_name}_without_any_instance__", *args, &blk)
+                possible_method_stub = "__#{self.class.name}_#{method_name}_without_any_instance__"
+                if respond_to?(possible_method_stub)
+                  __send__(possible_method_stub, *args, &blk)
+                else
+                  __send__(original_method_name, *args, &blk)
+                end
               end
             end
 
