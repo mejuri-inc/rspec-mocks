@@ -25,6 +25,10 @@ module AnyInstanceSpec
 
   class ChildClass < ParentClass
   end
+
+  module PrependTest
+    def foo; end
+  end
 end
 
 module RSpec
@@ -176,12 +180,44 @@ module RSpec
             expect(klass.new.foo).to eq(45)
           end
 
-          it 'prevents stubbing a method that is defined on the prepended module' do
+          it 'allows stubbing a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            allow_any_instance_of(klass).to receive(:foo).and_return(45)
 
-            expect {
+            expect(klass.new.foo).to eq(45)
+          end
+
+          context 'different classes having the same module prepended' do
+            let(:klass1) do
+              Class.new do
+                def existing_method; :existing_method_return_value; end
+                def existing_method_with_arguments(_a, _b=nil); :existing_method_with_arguments_return_value; end
+                def another_existing_method; end
+                private
+                def private_method; :private_method_return_value; end
+              end
+            end
+
+            let(:module) { Module.new { def foo; end } }
+
+            it 'allows stubbing methods defined on the prepended module for different classes' do
+              klass.class_eval { prepend AnyInstanceSpec::PrependTest }
+              klass1.class_eval { prepend AnyInstanceSpec::PrependTest }
               allow_any_instance_of(klass).to receive(:foo).and_return(45)
-            }.to fail_with(/prepended module/)
+              allow_any_instance_of(klass1).to receive(:foo).and_return(54)
+
+              expect(klass.new.foo).to eq(45)
+              expect(klass1.new.foo).to eq(54)
+            end
+
+            it 'does not affect methods defined on the prepended module for unstubbed classes' do
+              klass.class_eval { prepend AnyInstanceSpec::PrependTest }
+              klass1.class_eval { prepend AnyInstanceSpec::PrependTest }
+              allow_any_instance_of(klass).to receive(:foo).and_return(45)
+
+              expect(klass.new.foo).to eq(45)
+              expect(klass1.new.foo).to eq(nil)
+            end
           end
 
           it 'allows stubbing a chain starting with a method that is not defined on the prepended module' do
@@ -191,12 +227,11 @@ module RSpec
             expect(klass.new.foo.bar).to eq(45)
           end
 
-          it 'prevents stubbing a chain starting with a method that is defined on the prepended module' do
+          it 'allows stubbing a chain starting with a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
 
-            expect {
-              allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
-            }.to fail_with(/prepended module/)
+            expect(klass.new.foo.bar).to eq(45)
           end
         end
 
@@ -590,12 +625,11 @@ module RSpec
             expect(klass.new.foo).to eq(45)
           end
 
-          it 'prevents mocking a method that is defined on the prepended module' do
+          it 'allows mocking a method that is defined on the prepended module' do
             klass.class_eval { prepend Module.new { def foo; end } }
+            expect_any_instance_of(klass).to receive(:foo).and_return(45)
 
-            expect {
-              expect_any_instance_of(klass).to receive(:foo).and_return(45)
-            }.to fail_with(/prepended module/)
+            expect(klass.new.foo).to eq(45)
           end
         end
 

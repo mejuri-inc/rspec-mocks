@@ -2,15 +2,9 @@ source "https://rubygems.org"
 
 gemspec
 
-branch = File.read(File.expand_path("../maintenance-branch", __FILE__)).chomp
-%w[rspec rspec-core rspec-expectations rspec-support].each do |lib|
-  library_path = File.expand_path("../../#{lib}", __FILE__)
-  if File.exist?(library_path) && !ENV['USE_GIT_REPOS']
-    gem lib, :path => library_path
-  else
-    gem lib, :git => "https://github.com/rspec/#{lib}.git", :branch => branch
-  end
-end
+gem 'rspec', '~> 3.9.0'
+gem 'rspec-core', '~> 3.9.0'
+gem 'rspec-expectations', '~> 3.9.0'
 
 if RUBY_VERSION < '1.9.3'
   gem 'rake', '< 11.0.0' # rake 11 requires Ruby 1.9.3 or later
@@ -44,7 +38,7 @@ else
   gem 'ffi', '> 1.9.24' # prevent Github security vulnerability warning
 end
 
-if RUBY_VERSION < '2.2.0' && !!(RbConfig::CONFIG['host_os'] =~ /cygwin|mswin|mingw|bccwin|wince|emx/)
+if RUBY_VERSION <= '2.3.0' && !!(RbConfig::CONFIG['host_os'] =~ /cygwin|mswin|mingw|bccwin|wince|emx/)
   gem "childprocess", "< 1.0.0"
 end
 
@@ -63,10 +57,12 @@ group :documentation do
   gem 'github-markup', :platform => :mri
 end
 
-gem 'simplecov', '~> 0.8'
+gem 'simplecov', '~> 0.17.0'
 
 if RUBY_VERSION < '2.0.0' || RUBY_ENGINE == 'java'
   gem 'json', '< 2.0.0' # this is a dependency of simplecov
+else
+  gem 'json', '> 2.3.0'
 end
 
 platforms :jruby do

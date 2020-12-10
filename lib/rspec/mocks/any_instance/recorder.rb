@@ -21,6 +21,7 @@ module RSpec
           @backed_up_method_owner = {}
           @klass = klass
           @expectation_set = false
+          @prepended_module = nil
 
           return unless RSpec::Mocks.configuration.verify_partial_doubles?
           RSpec::Mocks.configuration.verifying_double_callbacks.each do |block|
@@ -124,6 +125,14 @@ module RSpec
         end
 
         # @private
+        def build_alias_prepended_method_name(method_name)
+          unless @klass.name
+            Object.const_set("Klass_#{@klass.object_id}", @klass)
+          end
+          "__#{@klass.name}_#{method_name}_without_any_instance__"
+        end
+
+        # @private
         def already_observing?(method_name)
           @observed_methods.include?(method_name) || super_class_observing?(method_name)
         end
@@ -196,31 +205,46 @@ module RSpec
           return unless @klass.instance_method(method_name).owner == @klass
 
           alias_method_name = build_alias_method_name(method_name)
-          @klass.class_exec(@backed_up_method_owner) do |backed_up_method_owner|
-            remove_method method_name
+          if @prepended_module
+            alias_prepended_method_name = build_alias_prepended_method_name(method_name)
+            module_methods = @prepended_module.public_instance_methods
+            remaining_stubs = module_methods.select { |m| m.end_with?("_#{method_name}_without_any_instance__") }
+            @prepended_module.module_exec do
+              remove_method alias_prepended_method_name
+              break if remaining_stubs.size > 1
 
-            # A @klass can have methods implemented (see Method#owner) in @klass
-            # or inherited from a superclass. In ruby 2.2 and earlier, we can copy
-            # a method regardless of the 'owner' and restore it to @klass after
-            # because a call to 'super' from @klass's copied method would end up
-            # calling the original class's superclass's method.
-            #
-            # With the commit below, available starting in 2.3.0, ruby changed
-            # this behavior and a call to 'super' from the method copied to @klass
-            # will call @klass's superclass method, which is the original
-            # implementer of this method!  This leads to very strange errors
-            # if @klass's copied method calls 'super', since it would end up
-            # calling itself, the original method implemented in @klass's
-            # superclass.
-            #
-            # For ruby 2.3 and above, we need to only restore methods that
-            # @klass originally owned.
-            #
-            # https://github.com/ruby/ruby/commit/c8854d2ca4be9ee6946e6d17b0e17d9ef130ee81
-            if RUBY_VERSION < "2.3" || backed_up_method_owner[method_name.to_sym] == self
+              remove_method method_name
               alias_method method_name, alias_method_name
+              remove_method alias_method_name
             end
-            remove_method alias_method_name
+            @prepended_module = nil if remaining_stubs.size == 1 # This was the last stub
+          else
+            @klass.class_exec(@backed_up_method_owner) do |backed_up_method_owner|
+              remove_method method_name
+
+              # A @klass can have methods implemented (see Method#owner) in @klass
+              # or inherited from a superclass. In ruby 2.2 and earlier, we can copy
+              # a method regardless of the 'owner' and restore it to @klass after
+              # because a call to 'super' from @klass's copied method would end up
+              # calling the original class's superclass's method.
+              #
+              # With the commit below, available starting in 2.3.0, ruby changed
+              # this behavior and a call to 'super' from the method copied to @klass
+              # will call @klass's superclass method, which is the original
+              # implementer of this method!  This leads to very strange errors
+              # if @klass's copied method calls 'super', since it would end up
+              # calling itself, the original method implemented in @klass's
+              # superclass.
+              #
+              # For ruby 2.3 and above, we need to only restore methods that
+              # @klass originally owned.
+              #
+              # https://github.com/ruby/ruby/commit/c8854d2ca4be9ee6946e6d17b0e17d9ef130ee81
+              if RUBY_VERSION < "2.3" || backed_up_method_owner[method_name.to_sym] == self
+                alias_method method_name, alias_method_name
+              end
+              remove_method alias_method_name
+            end
           end
         end
 
@@ -235,8 +259,17 @@ module RSpec
 
           alias_method_name = build_alias_method_name(method_name)
           @backed_up_method_owner[method_name.to_sym] ||= @klass.instance_method(method_name).owner
-          @klass.class_exec do
-            alias_method alias_method_name, method_name
+          if prepended_module(method_name)
+            unless @prepended_module.method_defined?(alias_method_name)
+              @prepended_module.module_exec do
+                alias_method alias_method_name, method_name
+                remove_method method_name
+              end
+            end
+          else
+            @klass.class_exec do
+              alias_method alias_method_name, method_name
+            end
           end
         end
 
@@ -245,8 +278,6 @@ module RSpec
         end
 
         def observe!(method_name)
-          allow_no_prepended_module_definition_of(method_name)
-
           if RSpec::Mocks.configuration.verify_partial_doubles? && !Mocks.configuration.temporarily_suppress_partial_double_verification
             unless public_protected_or_private_method_defined?(method_name)
               AnyInstance.error_generator.raise_does_not_implement_error(@klass, method_name)
@@ -257,9 +288,31 @@ module RSpec
           @observed_methods << method_name
           backup_method!(method_name)
           recorder = self
-          @klass.__send__(:define_method, method_name) do |*args, &blk|
-            recorder.playback!(self, method_name)
-            __send__(method_name, *args, &blk)
+          if @prepended_module
+            unless @prepended_module.method_defined?(method_name)
+              original_method_name = build_alias_method_name(method_name)
+
+              # Defining the stubbed method as a proxy, calling further the stub specifically defined for the
+              # current class, or, if no such stub found, calling the original method
+              @prepended_module.__send__(:define_method, method_name) do |*args, &blk|
+                possible_method_stub = "__#{self.class.name}_#{method_name}_without_any_instance__"
+                if respond_to?(possible_method_stub)
+                  __send__(possible_method_stub, *args, &blk)
+                else
+                  __send__(original_method_name, *args, &blk)
+                end
+              end
+            end
+
+            @prepended_module.__send__(:define_method, build_alias_prepended_method_name(method_name)) do |*args, &blk|
+              recorder.playback!(self, method_name)
+              __send__(method_name, *args, &blk)
+            end
+          else
+            @klass.__send__(:define_method, method_name) do |*args, &blk|
+              recorder.playback!(self, method_name)
+              __send__(method_name, *args, &blk)
+            end
           end
         end
 
@@ -275,18 +328,9 @@ module RSpec
           end
         end
 
-        if Support::RubyFeatures.module_prepends_supported?
-          def allow_no_prepended_module_definition_of(method_name)
-            prepended_modules = RSpec::Mocks::Proxy.prepended_modules_of(@klass)
-            problem_mod = prepended_modules.find { |mod| mod.method_defined?(method_name) }
-            return unless problem_mod
-
-            AnyInstance.error_generator.raise_not_supported_with_prepend_error(method_name, problem_mod)
-          end
-        else
-          def allow_no_prepended_module_definition_of(_method_name)
-            # nothing to do; prepends aren't supported on this version of ruby
-          end
+        def prepended_module(method_name)
+          @prepended_module =
+            RSpec::Mocks::Proxy.prepended_modules_of(@klass).select { |mod| mod.method_defined?(method_name) }.last
         end
       end
     end

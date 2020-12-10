@@ -139,7 +139,12 @@ module RSpec
         # The owner of M.b is the raw Module object, instead of the expected
         # singleton class of the module
         return true if RUBY_VERSION < '1.9' && owner == @object
-        owner == @klass || !(method_defined_on_klass?(owner))
+
+        owner == @klass ||
+          # When `extend self` is used, and not under any instance of
+          (owner.singleton_class == @klass &&
+            !Mocks.space.any_instance_recorder_for(owner, true)) ||
+          !(method_defined_on_klass?(owner))
       end
     end
   end
