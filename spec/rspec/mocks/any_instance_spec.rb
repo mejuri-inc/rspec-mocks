@@ -220,6 +220,22 @@ module RSpec
             end
           end
 
+          context 'when prepended several modules with the same method name defined' do
+            it 'stubs the correct one, not affecting instances other classes' do
+              mod0 = Module.new{ def f; :m0; end }
+              mod1 = Module.new{ def f; :m1; end }
+              klass0 = Class.new{ prepend mod0 }
+              klass1 = Class.new{ prepend mod1 }
+              klass = Class.new{ prepend mod1; prepend mod0 }
+
+              allow_any_instance_of(klass).to receive(:f).and_return(:f)
+
+              expect(klass.new.f).to eq(:f)
+              expect(klass0.new.f).to eq(:m0)
+              expect(klass1.new.f).to eq(:m1)
+            end
+          end
+
           it 'allows stubbing a chain starting with a method that is not defined on the prepended module' do
             klass.class_eval { prepend Module.new { def other; end } }
             allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
