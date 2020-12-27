@@ -295,14 +295,20 @@ module RSpec
               original_method_name = build_alias_method_name(method_name)
 
               # Defining the stubbed method as a proxy, calling further the stub specifically defined for the
-              # current class, or, if no such stub found, calling the original method
+              # current class or its ancestors, or, if no such stub found, calling the original method
               @prepended_module.__send__(:define_method, method_name) do |*args, &blk|
-                possible_method_stub = "__#{self.class.name}_#{method_name}_without_any_instance__"
-                if respond_to?(possible_method_stub)
-                  __send__(possible_method_stub, *args, &blk)
-                else
-                  __send__(original_method_name, *args, &blk)
+                method_stub_found = nil
+                method_stub_result = nil
+                self.class.ancestors.each do |ancestor|
+                  possible_method_stub = "__#{ancestor.name}_#{method_name}_without_any_instance__"
+                  next unless respond_to?(possible_method_stub)
+
+                  method_stub_result = __send__(possible_method_stub, *args, &blk)
+                  method_stub_found = true
                 end
+                return method_stub_result if method_stub_found
+
+                __send__(original_method_name, *args, &blk)
               end
             end
 

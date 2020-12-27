@@ -236,6 +236,19 @@ module RSpec
             end
           end
 
+          context 'when method is defined in a module prepended to a superclass' do
+            it 'finds and uses the correct stub' do
+              mod = Module.new{ def f; :f; end }
+              base = Class.new{ prepend mod }
+              sub = Class.new(base)
+
+              allow_any_instance_of(base).to receive(:f).and_return(:g)
+
+              expect(base.new.f).to eq(:g)
+              expect(sub.new.f).to eq(:g)
+            end
+          end
+
           it 'allows stubbing a chain starting with a method that is not defined on the prepended module' do
             klass.class_eval { prepend Module.new { def other; end } }
             allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
