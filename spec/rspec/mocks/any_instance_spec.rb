@@ -188,7 +188,7 @@ module RSpec
           end
 
           context 'different classes having the same module prepended' do
-            let(:klass1) do
+            let(:other_klass) do
               Class.new do
                 def existing_method; :existing_method_return_value; end
                 def existing_method_with_arguments(_a, _b=nil); :existing_method_with_arguments_return_value; end
@@ -202,21 +202,21 @@ module RSpec
 
             it 'allows stubbing methods defined on the prepended module for different classes' do
               klass.class_eval { prepend AnyInstanceSpec::PrependTest }
-              klass1.class_eval { prepend AnyInstanceSpec::PrependTest }
+              other_klass.class_eval { prepend AnyInstanceSpec::PrependTest }
               allow_any_instance_of(klass).to receive(:foo).and_return(45)
-              allow_any_instance_of(klass1).to receive(:foo).and_return(54)
+              allow_any_instance_of(other_klass).to receive(:foo).and_return(54)
 
               expect(klass.new.foo).to eq(45)
-              expect(klass1.new.foo).to eq(54)
+              expect(other_klass.new.foo).to eq(54)
             end
 
             it 'does not affect methods defined on the prepended module for unstubbed classes' do
               klass.class_eval { prepend AnyInstanceSpec::PrependTest }
-              klass1.class_eval { prepend AnyInstanceSpec::PrependTest }
+              other_klass.class_eval { prepend AnyInstanceSpec::PrependTest }
               allow_any_instance_of(klass).to receive(:foo).and_return(45)
 
               expect(klass.new.foo).to eq(45)
-              expect(klass1.new.foo).to eq(nil)
+              expect(other_klass.new.foo).to eq(nil)
             end
           end
 
