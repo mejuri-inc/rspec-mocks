@@ -211,6 +211,8 @@ module RSpec
             remaining_stubs = module_methods.select { |m| m.end_with?("_#{method_name}_without_any_instance__") }
             @prepended_module.module_exec do
               remove_method alias_prepended_method_name
+              Object.send(:remove_const, @klass.name) if @klass.name.start_with?'Klass_'
+
               break if remaining_stubs.size > 1
 
               remove_method method_name
