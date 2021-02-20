@@ -310,19 +310,22 @@ module RSpec
 
                 __send__(original_method_name, *args, &blk)
               end
+              @prepended_module.__send__(:ruby2_keywords, method_name) if Module.private_method_defined?(:ruby2_keywords)
             end
 
-            @prepended_module.__send__(:define_method, build_alias_prepended_method_name(method_name)) do |*args, &blk|
+            alias_of_prepended_method = build_alias_prepended_method_name(method_name)
+            @prepended_module.__send__(:define_method, alias_of_prepended_method) do |*args, &blk|
               recorder.playback!(self, method_name)
               __send__(method_name, *args, &blk)
             end
+            @prepended_module.__send__(:ruby2_keywords, alias_of_prepended_method) if Module.private_method_defined?(:ruby2_keywords)
           else
             @klass.__send__(:define_method, method_name) do |*args, &blk|
               recorder.playback!(self, method_name)
               __send__(method_name, *args, &blk)
             end
+            @klass.__send__(:ruby2_keywords, method_name) if Module.private_method_defined?(:ruby2_keywords)
           end
-          @klass.__send__(:ruby2_keywords, method_name) if @klass.respond_to?(:ruby2_keywords, true)
         end
 
         def mark_invoked!(method_name)
@@ -335,6 +338,7 @@ module RSpec
               method_name, inspect, invoked_instance
             )
           end
+          @klass.__send__(:ruby2_keywords, method_name) if Module.private_method_defined?(:ruby2_keywords)
         end
 
         def prepended_module(method_name)
