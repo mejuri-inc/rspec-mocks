@@ -205,7 +205,7 @@ module RSpec
           return unless @klass.instance_method(method_name).owner == @klass
 
           alias_method_name = build_alias_method_name(method_name)
-          if @prepended_module
+          if prepended_module(method_name)
             alias_prepended_method_name = build_alias_prepended_method_name(method_name)
             module_methods = @prepended_module.public_instance_methods
             remaining_stubs = module_methods.select { |m| m.end_with?("_#{method_name}_without_any_instance__") }
