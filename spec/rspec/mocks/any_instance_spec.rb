@@ -25,10 +25,6 @@ module AnyInstanceSpec
 
   class ChildClass < ParentClass
   end
-
-  module PrependTest
-    def foo; end
-  end
 end
 
 module RSpec
@@ -201,8 +197,8 @@ module RSpec
             let(:module) { Module.new { def foo; end } }
 
             it 'allows stubbing methods defined on the prepended module for different classes' do
-              klass.class_eval { prepend AnyInstanceSpec::PrependTest }
-              other_klass.class_eval { prepend AnyInstanceSpec::PrependTest }
+              klass.class_eval { prepend Module.new { def foo; end } }
+              other_klass.class_eval { prepend Module.new { def foo; end } }
               allow_any_instance_of(klass).to receive(:foo).and_return(45)
               allow_any_instance_of(other_klass).to receive(:foo).and_return(54)
 
@@ -211,8 +207,8 @@ module RSpec
             end
 
             it 'does not affect methods defined on the prepended module for unstubbed classes' do
-              klass.class_eval { prepend AnyInstanceSpec::PrependTest }
-              other_klass.class_eval { prepend AnyInstanceSpec::PrependTest }
+              klass.class_eval { prepend Module.new { def foo; end } }
+              other_klass.class_eval { prepend Module.new { def foo; end } }
               allow_any_instance_of(klass).to receive(:foo).and_return(45)
 
               expect(klass.new.foo).to eq(45)
