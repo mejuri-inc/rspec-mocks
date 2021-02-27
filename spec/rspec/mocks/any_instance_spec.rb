@@ -258,6 +258,17 @@ module RSpec
 
             expect(klass.new.foo.bar).to eq(45)
           end
+
+          it 'allows stubbing a chain of methods defined on different prepended module' do
+            klass.class_eval do
+              prepend Module.new { def foo; end }
+              prepend Module.new { def foo; end }
+            end
+
+            allow_any_instance_of(klass).to receive_message_chain(:foo, :bar).and_return(45)
+
+            expect(klass.new.foo.bar).to eq(45)
+          end
         end
 
         context 'aliased methods' do
